@@ -1,0 +1,17 @@
+# The demo (server.py) uses ONLY the Python standard library — nothing
+# in this file needs to be installed to run it.
+#
+# This file documents the production upgrade path referenced in the
+# code comments (server.py, rag.py, simulator.py). Install these only
+# if you're evolving the demo into a production service.
+
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+websockets==13.1
+pymongo==4.8.0          # or firebase-admin for Firebase
+openai==1.47.0           # or azure-openai
+faiss-cpu==1.8.0          # or chromadb
+opencv-python==4.10.0.84  # CCTV frame processing
+ultralytics==8.2.103      # YOLO person-detection for crowd density
+googlemaps==4.10.0        # routing / parking guidance
+python-multipart==0.0.9
