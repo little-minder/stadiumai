@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StadiumAI — Smart Stadium Operations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E17;
+    --surface:#111827;
+    --surface-2:#161F32;
+    --line:#232E45;
+    --turf:#33D17A;
+    --turf-dim:#1E7A47;
+    --flood:#FFB020;
+    --danger:#FF4D5E;
+    --text:#E9EDF5;
+    --muted:#8A93A8;
+    --disp: 'Barlow Condensed', sans-serif;
+    --body: 'Inter', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--body);}
+  body{
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(51,209,122,0.06), transparent 40%),
+      radial-gradient(circle at 85% 10%, rgba(255,176,32,0.05), transparent 40%);
+  }
+  ::selection{background:var(--turf-dim);}
+  a{color:inherit;}
+  button{font-family:var(--body);cursor:pointer;}
+
+  /* ---- header / scoreboard ticker ---- */
+  header.top{
+    position:sticky;top:0;z-index:50;
+    background:linear-gradient(180deg, #0D1220 0%, #0A0E17 100%);
+    border-bottom:1px solid var(--line);
+  }
+  .brandrow{display:flex;align-items:center;justify-content:space-between;padding:14px 22px 8px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand .mark{
+    width:34px;height:34px;border-radius:8px;
+    background:conic-gradient(from 220deg, var(--turf), var(--flood), var(--turf));
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--disp);font-weight:700;font-size:16px;color:#0A0E17;
+  }
+  .brand h1{font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:0.5px;margin:0;text-transform:uppercase;}
+  .brand h1 span{color:var(--turf);}
+  .status{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--danger);box-shadow:0 0 8px var(--danger);}
+  .dot.live{background:var(--turf);box-shadow:0 0 8px var(--turf);}
+
+  .ticker{
+    border-top:1px solid var(--line);
+    background:#080B12;
+    overflow:hidden;white-space:nowrap;position:relative;height:30px;
+  }
+  .ticker-track{
+    display:inline-flex;gap:48px;align-items:center;height:30px;
+    font-family:var(--mono);font-size:12px;color:var(--turf);
+    animation:scroll 26s linear infinite;padding-left:100%;
+  }
+  .ticker-track b{color:var(--flood);}
+  @keyframes scroll{from{transform:translateX(0);}to{transform:translateX(-100%);}}
+
+  nav.tabs{
+    display:flex;gap:2px;padding:0 22px;overflow-x:auto;
+    border-bottom:1px solid var(--line);background:var(--surface);
+  }
+  nav.tabs button{
+    background:transparent;border:none;color:var(--muted);
+    font-family:var(--disp);font-size:15px;letter-spacing:0.4px;text-transform:uppercase;
+    padding:12px 16px;border-bottom:2px solid transparent;white-space:nowrap;
+  }
+  nav.tabs button.active{color:var(--text);border-bottom-color:var(--turf);}
+  nav.tabs button:hover{color:var(--text);}
+
+  main{max-width:1180px;margin:0 auto;padding:24px 20px 80px;}
+  .panel{display:none;}
+  .panel.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  h2.pagehead{font-family:var(--disp);font-size:28px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px;}
+  p.sub{color:var(--muted);margin:0 0 20px;font-size:14px;}
+
+  .grid{display:grid;gap:14px;}
+  .grid.cols-2{grid-template-columns:1fr 1fr;}
+  .grid.cols-3{grid-template-columns:repeat(3,1fr);}
+  .grid.cols-4{grid-template-columns:repeat(4,1fr);}
+  @media(max-width:820px){.grid.cols-2,.grid.cols-3,.grid.cols-4{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;
+  }
+  .card h3{margin:0 0 10px;font-family:var(--disp);font-size:17px;text-transform:uppercase;letter-spacing:0.4px;font-weight:600;color:var(--text);}
+  .kpi{font-family:var(--mono);font-size:32px;font-weight:700;color:var(--turf);}
+  .kpi.warn{color:var(--flood);}
+  .kpi.bad{color:var(--danger);}
+  .kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;}
+
+  /* chat */
+  .chat-shell{display:flex;flex-direction:column;height:520px;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .chat-log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
+  .msg{max-width:78%;padding:10px 13px;border-radius:10px;font-size:14px;line-height:1.45;}
+  .msg.user{align-self:flex-end;background:var(--turf-dim);color:#EAFBF1;border-bottom-right-radius:2px;}
+  .msg.bot{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-bottom-left-radius:2px;}
+  .msg .src{display:block;margin-top:6px;font-family:var(--mono);font-size:10px;color:var(--muted);}
+  .quick{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px 12px;}
+  .chip{border:1px solid var(--line);background:var(--surface-2);color:var(--text);border-radius:999px;padding:6px 12px;font-size:12px;}
+  .chip:hover{border-color:var(--turf);}
+  .chat-input{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line);}
+  .chat-input select{background:var(--surface-2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:0 8px;}
+  .chat-input input{flex:1;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;}
+  .chat-input button{background:var(--turf);border:none;color:#06210F;font-weight:600;border-radius:8px;padding:0 18px;}
+
+  /* crowd map */
+  .zonegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  @media(max-width:820px){.zonegrid{grid-template-columns:repeat(2,1fr);}}
+  .zone{border-radius:10px;padding:14px;border:1px solid var(--line);position:relative;overflow:hidden;}
+  .zone .zname{font-family:var(--disp);font-size:20px;font-weight:700;}
+  .zone .zval{font-family:var(--mono);font-size:22px;margin-top:6px;}
+  .zone .zbar{height:6px;border-radius:3px;background:#00000055;margin-top:10px;overflow:hidden;}
+  .zone .zbar i{display:block;height:100%;background:var(--turf);}
+
+  .route-tip{margin-top:14px;padding:12px 14px;border-left:3px solid var(--flood);background:#1A1508;border-radius:6px;font-size:13px;color:#F5D9A0;display:none;}
+
+  /* digital twin */
+  #twinCanvas{width:100%;height:420px;background:radial-gradient(ellipse at center, #10331F 0%, #0A0E17 75%);border-radius:12px;border:1px solid var(--line);}
+
+  /* facility / food lists */
+  .list-item{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--surface);margin-bottom:8px;}
+  .list-item .name{font-weight:600;font-size:14px;}
+  .list-item .meta{font-size:12px;color:var(--muted);margin-top:2px;}
+  .tag{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line);}
+  .tag.good{color:var(--turf);border-color:var(--turf-dim);}
+  .tag.mid{color:var(--flood);border-color:#7A5A17;}
+  .tag.bad{color:var(--danger);border-color:#7A2530;}
+  .btn{background:var(--turf);color:#06210F;border:none;border-radius:7px;padding:8px 14px;font-weight:600;font-size:13px;}
+  .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text);}
+  .btn.danger{background:var(--danger);color:#2b0209;}
+
+  select, input[type=text]{background:var(--surface-2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;}
+
+  /* emergency */
+  .sos{
+    display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;
+    background:radial-gradient(circle, #3a0d13 0%, var(--surface) 70%);
+    border:1px solid #5c1a22;border-radius:14px;padding:34px;text-align:center;
+  }
+  .sos button{
+    width:140px;height:140px;border-radius:50%;background:var(--danger);border:none;color:#2b0209;
+    font-family:var(--disp);font-size:22px;font-weight:700;text-transform:uppercase;
+    box-shadow:0 0 0 0 rgba(255,77,94,.6);animation:pulse 2s infinite;
+  }
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,77,94,.55);}70%{box-shadow:0 0 0 22px rgba(255,77,94,0);}100%{box-shadow:0 0 0 0 rgba(255,77,94,0);}}
+
+  .incident-feed{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;}
+  .incident{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--surface);}
+  .incident.predicted{border-left:3px solid var(--flood);}
+  .incident.active{border-left:3px solid var(--danger);}
+  .incident .top{display:flex;justify-content:space-between;font-size:13px;font-weight:600;}
+  .incident .meta{font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--mono);}
+
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:30px 0;}
+  .staffrow{display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px dashed var(--line);}
+  .staffrow:last-child{border-bottom:none;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brandrow">
+    <div class="brand">
+      <div class="mark">SA</div>
+      <h1>Stadium<span>AI</span></h1>
+    </div>
+    <div class="status"><span class="dot" id="connDot"></span><span id="connLabel">connecting…</span> · <span id="clock">--:--:--</span></div>
+  </div>
+  <div class="ticker"><div class="ticker-track" id="tickerTrack">LOADING LIVE FEED…</div></div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="assistant" class="active">Fan Assistant</button>
+    <button data-tab="crowd">Live Crowd Map</button>
+    <button data-tab="twin">Digital Twin</button>
+    <button data-tab="emergency">Emergency</button>
+    <button data-tab="food">Food Ordering</button>
+    <button data-tab="facilities">Facility Finder</button>
+    <button data-tab="parking">Smart Parking</button>
+    <button data-tab="dashboard">Organizer Dashboard</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- FAN ASSISTANT -->
+  <section class="panel active" id="panel-assistant">
+    <h2 class="pagehead">AI Fan Assistant</h2>
+    <p class="sub">Ask about seating, parking, food, facilities, schedule or emergencies — in your language.</p>
+    <div class="chat-shell">
+      <div class="chat-log" id="chatLog"></div>
+      <div class="quick" id="quickChips"></div>
+      <div class="chat-input">
+        <select id="langSelect">
+          <option value="en">EN</option>
+          <option value="es">ES</option>
+          <option value="fr">FR</option>
+          <option value="pt">PT</option>
+          <option value="ar">AR</option>
+        </select>
+        <input type="text" id="chatInput" placeholder="Ask a question…" />
+        <button id="chatSend">Send</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CROWD MAP -->
+  <section class="panel" id="panel-crowd">
+    <h2 class="pagehead">Live Crowd Map</h2>
+    <p class="sub">Zone density from simulated CCTV / IoT occupancy sensors, updating in real time.</p>
+    <div class="zonegrid" id="zoneGrid"></div>
+    <div class="route-tip" id="routeTip"></div>
+  </section>
+
+  <!-- DIGITAL TWIN -->
+  <section class="panel" id="panel-twin">
+    <h2 class="pagehead">Digital Twin Stadium</h2>
+    <p class="sub">Simplified live 2D model of crowd movement across the eight stadium zones. (Production: full 3D twin via Unity/Unreal + live camera fusion.)</p>
+    <canvas id="twinCanvas" width="1100" height="420"></canvas>
+  </section>
+
+  <!-- EMERGENCY -->
+  <section class="panel" id="panel-emergency">
+    <h2 class="pagehead">Emergency AI</h2>
+    <p class="sub">Reports an incident, dispatches the nearest medical/security team and generates an evacuation route instantly.</p>
+    <div class="grid cols-2">
+      <div class="sos">
+        <div>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;">Your zone</label>
+          <select id="sosZone"></select>
+        </div>
+        <button id="sosBtn">SOS</button>
+        <div style="font-size:12px;color:var(--muted);">Tap to alert the nearest medical &amp; security team</div>
+      </div>
+      <div class="card">
+        <h3>Live Incident Feed <span style="color:var(--muted);font-weight:400;font-size:12px;">(predicted + active)</span></h3>
+        <div class="incident-feed" id="incidentFeed"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOD -->
+  <section class="panel" id="panel-food">
+    <h2 class="pagehead">Smart Food Ordering</h2>
+    <p class="sub">Wait times are predicted live from each stall's zone crowd density. Sorted shortest wait first.</p>
+    <div id="foodList"></div>
+  </section>
+
+  <!-- FACILITIES -->
+  <section class="panel" id="panel-facilities">
+    <h2 class="pagehead">Smart Facility Finder</h2>
+    <p class="sub">Find the nearest restroom, water station, medical room, exit or shop from your gate.</p>
+    <div class="grid cols-2" style="margin-bottom:16px;">
+      <div>
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;">Facility type</label>
+        <select id="facType">
+          <option value="">All</option>
+          <option value="restroom">Restroom</option>
+          <option value="water">Water station</option>
+          <option value="medical">Medical room</option>
+          <option value="exit">Exit</option>
+          <option value="shop">Shop</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px;">Nearest to zone</label>
+        <select id="facZone"></select>
+      </div>
+    </div>
+    <div id="facList"></div>
+
+    <div class="card" style="margin-top:22px;">
+      <h3>Personalized Fan Companion</h3>
+      <p class="sub" style="margin-bottom:12px;">One-tap best gate, stall, restroom, shop and exit based on your current zone.</p>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">
+        <select id="compZone"></select>
+        <button class="btn" id="compBtn">Get suggestions</button>
+      </div>
+      <div id="compResult"></div>
+    </div>
+  </section>
+
+  <!-- PARKING -->
+  <section class="panel" id="panel-parking">
+    <h2 class="pagehead">Smart Parking</h2>
+    <p class="sub">Live slot availability across all parking zones, with one-tap reservation.</p>
+    <div class="grid cols-4" id="parkingGrid"></div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section class="panel" id="panel-dashboard">
+    <h2 class="pagehead">Organizer Dashboard</h2>
+    <p class="sub">Live operational overview — crowd, incidents, staff deployment and sustainability.</p>
+    <div class="grid cols-4" id="kpiRow" style="margin-bottom:18px;"></div>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>Live Crowd Heatmap</h3>
+        <div class="zonegrid" id="dashZoneGrid"></div>
+      </div>
+      <div class="card">
+        <h3>AI Incident Predictor — Active</h3>
+        <div class="incident-feed" id="dashIncidents"></div>
+      </div>
+      <div class="card">
+        <h3>Volunteer &amp; Staff Copilot</h3>
+        <div id="staffList"></div>
+      </div>
+      <div class="card">
+        <h3>Carbon Footprint Dashboard</h3>
+        <div id="carbonBox"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>StadiumAI demo — simulated IoT/CCTV/LLM layer running fully offline. See README for the production upgrade path.</footer>
+
+<script>
+const API = "http://localhost:8000";
+const ZONES = ["A","B","C","D","E","F","G","H"];
+
+// ---------- tabs ----------
+document.getElementById('tabs').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-tab]');
+  if(!btn) return;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+});
+
+// ---------- clock ----------
+setInterval(()=>{
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+},1000);
+
+// ---------- zone selects ----------
+function fillZoneSelect(el, withAll=false){
+  el.innerHTML = (withAll? '<option value="">All zones</option>':'') +
+    ZONES.map(z=>`<option value="${z}">Zone ${z}</option>`).join('');
+}
+fillZoneSelect(document.getElementById('sosZone'));
+fillZoneSelect(document.getElementById('facZone'), true);
+fillZoneSelect(document.getElementById('compZone'));
+
+// ============================================================
+// FAN ASSISTANT
+// ============================================================
+const chatLog = document.getElementById('chatLog');
+const quickChips = document.getElementById('quickChips');
+const QUICK = [
+  "Where are my seat directions?",
+  "Where can I park?",
+  "Where is the nearest restroom?",
+  "What's the match schedule?",
+  "What food is nearby?",
+  "What do I do in an emergency?"
+];
+quickChips.innerHTML = QUICK.map(q=>`<button class="chip" data-q="${q}">${q}</button>`).join('');
+quickChips.addEventListener('click', e=>{
+  const c = e.target.closest('.chip');
+  if(c) sendChat(c.dataset.q);
+});
+
+function addMsg(text, who, sources){
+  const div = document.createElement('div');
+  div.className = 'msg ' + who;
+  div.textContent = text;
+  if(sources && sources.length){
+    const s = document.createElement('span');
+    s.className = 'src';
+    s.textContent = 'Source: ' + sources.join(', ');
+    div.appendChild(s);
+  }
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+addMsg("Hi! I'm your StadiumAI fan assistant. Ask me about seating, parking, food, facilities, the schedule, or emergencies — try a quick question below.", "bot");
+
+async function sendChat(text){
+  if(!text) return;
+  addMsg(text, 'user');
+  const lang = document.getElementById('langSelect').value;
+  try{
+    const res = await fetch(API+"/api/chat", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({message:text, lang})
+    });
+    const data = await res.json();
+    addMsg(data.answer, 'bot', data.sources);
+  }catch(err){
+    addMsg("Backend not reachable — make sure the StadiumAI server is running on :8000.", 'bot');
+  }
+}
+document.getElementById('chatSend').addEventListener('click', ()=>{
+  const inp = document.getElementById('chatInput');
+  const v = inp.value.trim();
+  if(v){ sendChat(v); inp.value=''; }
+});
+document.getElementById('chatInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter') document.getElementById('chatSend').click();
+});
+
+// ============================================================
+// LIVE CROWD MAP + DIGITAL TWIN (shared SSE state)
+// ============================================================
+const zoneGrid = document.getElementById('zoneGrid');
+const dashZoneGrid = document.getElementById('dashZoneGrid');
+ZONES.forEach(z=>{
+  const el = document.createElement('div');
+  el.className='zone'; el.id='zone-'+z;
+  el.innerHTML = `<div class="zname">Zone ${z}</div><div class="zval" id="zval-${z}">--%</div><div class="zbar"><i id="zbar-${z}" style="width:0%"></i></div>`;
+  zoneGrid.appendChild(el);
+});
+dashZoneGrid.innerHTML = zoneGrid.innerHTML;
+
+function zoneColor(v){
+  if(v>75) return '#FF4D5E';
+  if(v>50) return '#FFB020';
+  return '#33D17A';
+}
+
+let lastCrowd = {};
+function updateCrowdUI(crowd){
+  lastCrowd = crowd;
+  let busiest=null, busiestVal=-1;
+  ZONES.forEach(z=>{
+    const v = crowd[z] ?? 0;
+    if(v>busiestVal){busiestVal=v; busiest=z;}
+    [document.getElementById('zval-'+z)].forEach(elm=>{ if(elm) elm.textContent = v.toFixed(0)+'%'; });
+    const bar = document.getElementById('zbar-'+z);
+    if(bar){ bar.style.width = v+'%'; bar.style.background = zoneColor(v); }
+    const zoneEl = document.getElementById('zone-'+z);
+    if(zoneEl) zoneEl.style.borderColor = v>75 ? '#7A2530' : (v>50 ? '#7A5A17' : '#232E45');
+  });
+  // second copy inside dashboard grid uses same ids -> also update duplicated set
+  document.querySelectorAll('#dashZoneGrid .zone').forEach((el,i)=>{
+    const z = ZONES[i]; const v = crowd[z] ?? 0;
+    el.querySelector('.zval').textContent = v.toFixed(0)+'%';
+    const bar = el.querySelector('.zbar i');
+    bar.style.width = v+'%'; bar.style.background = zoneColor(v);
+  });
+
+  const tip = document.getElementById('routeTip');
+  if(busiestVal>75){
+    tip.style.display='block';
+    tip.textContent = `⚠ Zone ${busiest} is congested (${busiestVal.toFixed(0)}%). AI suggests routing via Zone ${ZONES[(ZONES.indexOf(busiest)+3)%8]} concourse instead.`;
+  } else {
+    tip.style.display='none';
+  }
+  drawTwin(crowd);
+}
+
+// digital twin canvas
+const canvas = document.getElementById('twinCanvas');
+const ctx = canvas.getContext('2d');
+let twinDots = ZONES.map((z,i)=>({z, particles: Array.from({length:14},()=>({
+  x: 90+ (i%4)*250 + Math.random()*180, y: 60 + Math.floor(i/4)*220 + Math.random()*140,
+  vx:(Math.random()-.5)*0.6, vy:(Math.random()-.5)*0.6
+}))}));
+
+function drawTwin(crowd){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // zone panels
+  ZONES.forEach((z,i)=>{
+    const x = 40 + (i%4)*265, y=30+Math.floor(i/4)*195, w=235, h=170;
+    const v = crowd[z] ?? 20;
+    ctx.strokeStyle = zoneColor(v);
+    ctx.lineWidth=1.4;
+    ctx.strokeRect(x,y,w,h);
+    ctx.fillStyle='rgba(255,255,255,0.04)';
+    ctx.fillRect(x,y,w,h);
+    ctx.font="600 13px 'Barlow Condensed', sans-serif";
+    ctx.fillStyle="#8A93A8";
+    ctx.fillText(`ZONE ${z} — ${v.toFixed(0)}%`, x+8, y+18);
+
+    const group = twinDots[i];
+    const density = Math.max(3, Math.round((v/100)*24));
+    while(group.particles.length < density) group.particles.push({x:x+Math.random()*w, y:y+Math.random()*h, vx:(Math.random()-.5)*.6, vy:(Math.random()-.5)*.6});
+    while(group.particles.length > density) group.particles.pop();
+    group.particles.forEach(p=>{
+      p.x += p.vx; p.y += p.vy;
+      if(p.x < x || p.x > x+w) p.vx*=-1;
+      if(p.y < y+22 || p.y > y+h) p.vy*=-1;
+      p.x = Math.min(Math.max(p.x, x+2), x+w-2);
+      p.y = Math.min(Math.max(p.y, y+24), y+h-2);
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,2.4,0,Math.PI*2);
+      ctx.fillStyle = zoneColor(v);
+      ctx.fill();
+    });
+  });
+}
+setInterval(()=>drawTwin(lastCrowd), 90);
+
+// ============================================================
+// SSE connection
+// ============================================================
+const connDot = document.getElementById('connDot');
+const connLabel = document.getElementById('connLabel');
+const tickerTrack = document.getElementById('tickerTrack');
+
+function setConn(live){
+  connDot.classList.toggle('live', live);
+  connLabel.textContent = live ? 'live feed connected' : 'reconnecting…';
+}
+
+let incidents = [];
+let staff = [];
+let parkingState = {};
+let carbonState = {};
+
+function renderTicker(){
+  const avg = Object.values(lastCrowd).length ? (Object.values(lastCrowd).reduce((a,b)=>a+b,0)/Object.values(lastCrowd).length).toFixed(0) : '--';
+  const busiestEntry = Object.entries(lastCrowd).sort((a,b)=>b[1]-a[1])[0];
+  const activeIncidents = incidents.filter(i=>i.status==='predicted'||i.status==='active').length;
+  tickerTrack.innerHTML =
+    `AVG STADIUM DENSITY <b>${avg}%</b>` +
+    (busiestEntry ? ` &nbsp;•&nbsp; BUSIEST ZONE <b>${busiestEntry[0]} (${busiestEntry[1].toFixed(0)}%)</b>` : '') +
+    ` &nbsp;•&nbsp; ACTIVE INCIDENTS <b>${activeIncidents}</b>` +
+    ` &nbsp;•&nbsp; STAFF DEPLOYED <b>${staff.filter(s=>s.status!=='available').length}</b>` +
+    ` &nbsp;•&nbsp; PARKING FREE <b>${Object.values(parkingState).reduce((a,p)=>a+(p.capacity-p.occupied),0)}</b>` +
+    ` &nbsp;•&nbsp; WELCOME TO STADIUMAI — REAL-TIME OPERATIONS`;
+}
+
+function renderIncidentFeed(){
+  const html = incidents.slice(0,12).map(i=>`
+    <div class="incident ${i.status}">
+      <div class="top"><span>${i.kind} — Zone ${i.zone}</span><span>${i.predicted? 'ETA '+i.eta_minutes+'m':'ACTIVE'}</span></div>
+      <div class="meta">risk ${i.risk_score}% · ${i.status.toUpperCase()} · nearest medical: ${i.nearest_medical? i.nearest_medical.name : '—'}</div>
+      <div class="meta">${i.recommended_route || ''}</div>
+    </div>`).join('') || '<div class="meta">No incidents right now.</div>';
+  document.getElementById('incidentFeed').innerHTML = html;
+  document.getElementById('dashIncidents').innerHTML = html;
+}
+
+function renderStaff(){
+  document.getElementById('staffList').innerHTML = staff.map(s=>`
+    <div class="staffrow"><span>${s.name} <span style="color:var(--muted)">(${s.role}, Zone ${s.zone})</span></span>
+    <span class="tag ${s.status==='available'?'good':'mid'}">${s.status}</span></div>`).join('');
+}
+
+function renderCarbon(){
+  document.getElementById('carbonBox').innerHTML = `
+    <div class="grid cols-3">
+      <div><div class="kpi" style="font-size:22px;">${carbonState.energy_kwh?.toLocaleString()||'--'}</div><div class="kpi-label">Energy (kWh)</div></div>
+      <div><div class="kpi warn" style="font-size:22px;">${carbonState.waste_kg?.toLocaleString()||'--'}</div><div class="kpi-label">Waste (kg)</div></div>
+      <div><div class="kpi bad" style="font-size:22px;">${carbonState.transport_co2_kg?.toLocaleString()||'--'}</div><div class="kpi-label">Transport CO₂ (kg)</div></div>
+    </div>
+    <p class="sub" style="margin-top:10px;">AI tip: shift 10% of shuttle trips to off-peak hours to cut transport emissions by an estimated 6-8%.</p>`;
+}
+
+function renderParking(){
+  const grid = document.getElementById('parkingGrid');
+  grid.innerHTML = Object.entries(parkingState).map(([id,p])=>{
+    const pct = Math.round(100*p.occupied/p.capacity);
+    return `<div class="card">
+      <h3>${id}</h3>
+      <div class="kpi ${pct>85?'bad':pct>60?'warn':''}" style="font-size:26px;">${p.capacity-p.occupied}</div>
+      <div class="kpi-label">free of ${p.capacity}</div>
+      <div class="zbar" style="margin-top:10px;"><i style="width:${pct}%;background:${pct>85?'#FF4D5E':pct>60?'#FFB020':'#33D17A'}"></i></div>
+      <button class="btn secondary" style="margin-top:12px;width:100%;" onclick="reserveParking('${id}')">Reserve slot</button>
+    </div>`;
+  }).join('');
+}
+window.reserveParking = async function(zoneId){
+  try{
+    const res = await fetch(API+"/api/parking/reserve", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({zone_id:zoneId})});
+    const data = await res.json();
+    alert('Reserved! Confirmation: '+data.reservation_id);
+  }catch(e){ alert('Backend not reachable.'); }
+};
+
+function renderKpis(){
+  const avg = Object.values(lastCrowd).length ? (Object.values(lastCrowd).reduce((a,b)=>a+b,0)/Object.values(lastCrowd).length) : 0;
+  const busiestEntry = Object.entries(lastCrowd).sort((a,b)=>b[1]-a[1])[0] || ['-',0];
+  const activeIncidents = incidents.filter(i=>i.status==='predicted'||i.status==='active').length;
+  document.getElementById('kpiRow').innerHTML = `
+    <div class="card"><div class="kpi">${avg.toFixed(0)}%</div><div class="kpi-label">Avg crowd density</div></div>
+    <div class="card"><div class="kpi warn">${busiestEntry[0]}</div><div class="kpi-label">Busiest zone (${busiestEntry[1].toFixed(0)}%)</div></div>
+    <div class="card"><div class="kpi ${activeIncidents>0?'bad':''}">${activeIncidents}</div><div class="kpi-label">Active incidents</div></div>
+    <div class="card"><div class="kpi">${staff.filter(s=>s.status!=='available').length}/${staff.length}</div><div class="kpi-label">Staff deployed</div></div>`;
+}
+
+function connect(){
+  const es = new EventSource(API+"/events");
+  es.addEventListener('open', ()=>setConn(true));
+  es.onerror = ()=>{ setConn(false); };
+  es.addEventListener('snapshot', e=>{
+    setConn(true);
+    const d = JSON.parse(e.data);
+    updateCrowdUI(d.crowd); incidents = d.incidents; staff = d.staff; parkingState = d.parking; carbonState = d.carbon;
+    renderIncidentFeed(); renderStaff(); renderCarbon(); renderParking(); renderKpis(); renderTicker();
+  });
+  es.addEventListener('crowd_update', e=>{ updateCrowdUI(JSON.parse(e.data)); renderKpis(); renderTicker(); });
+  es.addEventListener('incident_alert', e=>{ incidents.unshift(JSON.parse(e.data)); incidents=incidents.slice(0,20); renderIncidentFeed(); renderKpis(); renderTicker(); });
+  es.addEventListener('staff_assignment', e=>{ /* staff array mutated server-side; re-fetch via dashboard poll below */ });
+  es.addEventListener('parking_update', e=>{ parkingState = JSON.parse(e.data); renderParking(); renderTicker(); });
+  es.addEventListener('carbon_update', e=>{ carbonState = JSON.parse(e.data); renderCarbon(); });
+}
+connect();
+
+// periodic full refresh for staff/incident consistency (covers SSE edge cases)
+setInterval(async ()=>{
+  try{
+    const res = await fetch(API+"/api/dashboard");
+    const d = await res.json();
+    staff = d.staff; incidents = d.active_incidents.concat(incidents.filter(i=>!d.active_incidents.find(x=>x.id===i.id))).slice(0,20);
+    renderStaff(); renderKpis(); renderIncidentFeed(); renderTicker();
+  }catch(e){}
+}, 6000);
+
+// ============================================================
+// EMERGENCY
+// ============================================================
+document.getElementById('sosBtn').addEventListener('click', async ()=>{
+  const zone = document.getElementById('sosZone').value;
+  try{
+    const res = await fetch(API+"/api/emergency", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({kind:"Fan-reported emergency", zone})});
+    const data = await res.json();
+    alert(`Alert sent! Nearest medical: ${data.nearest_medical?.name || 'n/a'}\nEvacuation route: ${data.recommended_route}`);
+  }catch(e){ alert('Backend not reachable.'); }
+});
+
+// ============================================================
+// FOOD
+// ============================================================
+async function loadFood(){
+  try{
+    const res = await fetch(API+"/api/food-stalls");
+    const stalls = await res.json();
+    document.getElementById('foodList').innerHTML = stalls.map(s=>`
+      <div class="list-item">
+        <div>
+          <div class="name">${s.name} <span class="tag" style="margin-left:6px;">Zone ${s.zone}</span></div>
+          <div class="meta">${s.menu.join(', ')}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="tag ${s.estimated_wait_min<6?'good':s.estimated_wait_min<12?'mid':'bad'}">${s.estimated_wait_min} min wait</span>
+          <button class="btn" onclick='orderFood("${s.id}","${s.menu[0]}")'>Order</button>
+        </div>
+      </div>`).join('');
+  }catch(e){ document.getElementById('foodList').innerHTML = '<p class="sub">Backend not reachable.</p>'; }
+}
+window.orderFood = async function(stallId, item){
+  try{
+    const res = await fetch(API+"/api/food-order", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({stall_id:stallId, items:[item]})});
+    const data = await res.json();
+    alert('Order confirmed: '+data.order_id);
+  }catch(e){ alert('Backend not reachable.'); }
+};
+loadFood();
+setInterval(loadFood, 8000);
+
+// ============================================================
+// FACILITIES + COMPANION
+// ============================================================
+async function loadFacilities(){
+  const type = document.getElementById('facType').value;
+  const near = document.getElementById('facZone').value;
+  const params = new URLSearchParams();
+  if(type) params.set('type', type);
+  if(near) params.set('near', near);
+  try{
+    const res = await fetch(API+"/api/facilities?"+params.toString());
+    const items = await res.json();
+    document.getElementById('facList').innerHTML = items.map(f=>`
+      <div class="list-item">
+        <div><div class="name">${f.name}</div><div class="meta">${f.type} · Zone ${f.zone}</div></div>
+        <span class="tag">Zone ${f.zone}</span>
+      </div>`).join('') || '<p class="sub">No facilities found.</p>';
+  }catch(e){ document.getElementById('facList').innerHTML = '<p class="sub">Backend not reachable.</p>'; }
+}
+document.getElementById('facType').addEventListener('change', loadFacilities);
+document.getElementById('facZone').addEventListener('change', loadFacilities);
+loadFacilities();
+
+document.getElementById('compBtn').addEventListener('click', async ()=>{
+  const zone = document.getElementById('compZone').value;
+  try{
+    const res = await fetch(API+"/api/companion", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({zone})});
+    const d = await res.json();
+    document.getElementById('compResult').innerHTML = `
+      <div class="grid cols-2">
+        <div class="list-item"><div><div class="name">Gate</div><div class="meta">${d.suggested_gate}</div></div></div>
+        <div class="list-item"><div><div class="name">Food stall</div><div class="meta">${d.suggested_food_stall.name} (${d.suggested_food_stall.estimated_wait_min} min)</div></div></div>
+        <div class="list-item"><div><div class="name">Restroom</div><div class="meta">${d.suggested_restroom?.name||'—'}</div></div></div>
+        <div class="list-item"><div><div class="name">Shop</div><div class="meta">${d.suggested_shop?.name||'—'}</div></div></div>
+        <div class="list-item"><div><div class="name">Exit</div><div class="meta">${d.suggested_exit?.name||'—'}</div></div></div>
+        <div class="list-item"><div><div class="name">Crowd here</div><div class="meta">${d.crowd_density_here?.toFixed(0)}%</div></div></div>
+      </div>`;
+  }catch(e){ document.getElementById('compResult').innerHTML = '<p class="sub">Backend not reachable.</p>'; }
+});
+</script>
+</body>
+</html>
